@@ -12,4 +12,4 @@ The parallel simulation is launched in the following manner:
 
 mpirun -np ${TotalSimulations}*${ProcessorsPerSimulations} ./delta_Fmn ${TotalSimulations}
 
-Note: Please ensure that all the pre-requisite compiler modules and libraries are set correctly.
+Note: Please ensure that all the pre-requisite compiler modules and libraries are set correctly before running.
