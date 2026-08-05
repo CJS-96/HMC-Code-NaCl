@@ -2,14 +2,12 @@ module montecarlo
   use liblammps
   use, intrinsic :: ISO_C_binding, only : C_ptr, c_null_ptr, C_double
   use mpi_f08 , only: MPI_Bcast, MPI_comm, MPI_INTEGER
-  !use lammps, only: lammps_open, lammps_file, lammps_command, lammps_close, lammps_extract_global, &
-   !   lammps_scatter_atoms, lammps_gather_atoms, lammps_extract_compute, LMP_STYLE_GLOBAL, LMP_TYPE_VECTOR
   use json_module, only: json_file
   use consts, only: PR
   use nucleus, only: ComputeClusterProperties
   use random, only: RandomNumber, SetRandomNumberSeed
   use datatypes, only: ClusterInfo, SpeciesInfo, BiasInfo
-  use mcmoves, only: MD_move, Volume_move
+  use mcmoves, only: MD_move
   implicit none
   private
 

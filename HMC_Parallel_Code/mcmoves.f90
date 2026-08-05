@@ -12,7 +12,7 @@ module mcmoves
 
   real(PR), parameter :: deltabox_max=1._PR
 
-  public :: MD_move, Volume_move
+  public :: MD_move
 
 contains
   !====================================================================================================
@@ -119,106 +119,6 @@ contains
   end subroutine MD_move
 
   !====================================================================================================
-  subroutine Volume_move(lmp,MyRank,Communicator,Temperature,Pressure,Bias,Species,CutOffDistance,Cluster,naccpt)
-    type(LAMMPS), intent(in) :: lmp
-    integer, intent(in) :: MyRank
-    type(MPI_comm), intent(in) :: Communicator
-    real(PR), intent(in) :: Temperature, Pressure
-    type(SpeciesInfo), dimension(:), intent(in) :: Species
-    type(BiasInfo), intent(in) :: Bias
-    real(PR), dimension(2), intent(in) :: CutOffDistance
-    type(ClusterInfo), intent(inout) :: Cluster
-    integer, intent(inout) :: naccpt
-
-    real(PR) :: beta, vf
-    logical :: accept
-
-    real(PR), dimension(:), allocatable :: x, xn
-    real(PR), pointer :: boxlo_ptr => NULL(),boxhi_ptr=>NULL()
-    real(PR), target :: box, new_box, deltabox
-    integer :: NumberOfMolecules
-    real(C_double), pointer :: Energy=>NULL(), NewEnergy=>NULL()
-    real(PR) :: deltaVolume, ratio, boxratio
-    real(PR) :: arg, deltaEnergy, deltaBias_m, deltaBias_s, deltaBias
-    type(ClusterInfo) :: NewCluster
-    character(len=100) :: command_str
-    integer :: natoms3, ierror
-
-    !** Temporary variables
-    beta = 4184._8/MOLAR_GAS_CONSTANT/Temperature
-
-    !** Determine box size **
-    boxlo_ptr=lmp%extract_global('boxxlo')
-    boxhi_ptr=lmp%extract_global('boxxhi')
-    box=boxhi_ptr-boxlo_ptr
-
-    !** Gather atoms positions
-    call lmp%gather_atoms('x' , 3, x )
-    ! Calculate the energies at the start of Trajectory
-    call lmp%command('run 0')
-    Energy=lmp%extract_compute('thermo_pe', lmp%style%global, lmp%type%scalar)
-
-    !** Allocate memory to temporary arrays
-    natoms3=size(x)
-    allocate(xn(natoms3))
-    ! Scale simulation box and molecule positions
-    if(MyRank == 0)then
-      deltabox=(2._PR*RandomNumber()-1._PR)*deltabox_max
-      new_box=box+deltabox
-      boxratio=new_box/box
-      ratio=boxratio**3
-      call ScalePositions(x,xn,Species,box,boxratio)
-    end if
-    call MPI_Bcast(boxratio, 1, MPI_DOUBLE_PRECISION, 0, Communicator, ierror)
-    write(command_str,'(a4,f10.4)')'change_box x scale ',boxratio,' y scale ',boxratio,' z scale ',boxratio
-    call lmp%command(trim(command_str))
-    call MPI_Bcast( xn, natoms3 , MPI_DOUBLE_PRECISION, 0, Communicator, ierror)
-    call lmp%scatter_atoms('x', xn)
-    call lmp%command('run 0')
-    NewEnergy=lmp%extract_compute('thermo_pe', lmp%style%global, lmp%type%scalar)
-
-    ! Accept or reject the trajectory
-    deltaEnergy=NewEnergy-Energy
-    deltaVolume=new_box**3-box**3
-    if(MyRank == 0)then
-      !** Compute Cluster Properties
-      call ComputeClusterProperties(Species,xn,box,CutOffDistance,NewCluster)
-
-      !** Compute Bias
-      deltaBias_m=Bias%k_m*real((NewCluster%CrystalSize-Bias%m0)**2-(Cluster%CrystalSize-Bias%m0)**2,PR)
-      deltaBias_s=Bias%k_s*real((NewCluster%SolvationState-Bias%s0)**2-(Cluster%SolvationState-Bias%s0)**2,PR)
-      deltaBias=deltaBias_m+deltaBias_s
-
-      NumberOfMolecules=sum(Species%NumberOfMolecules)
-      arg=beta*(deltaEnergy+Pressure*deltaVolume)-real(3*NumberOfMolecules-1,PR)*log(boxratio)+deltaBias
-      if(arg < 0._PR)then
-        accept=.true.
-      elseif(arg < 100._PR)then
-        accept=(RandomNumber() < exp(-arg))
-      else
-        accept=.false.
-      end if
-      if(accept)then
-          naccpt=naccpt+1
-          Cluster=NewCluster
-      end if
-    end if
-
-    call MPI_Bcast(accept, 1 , MPI_LOGICAL, 0, Communicator, ierror)
-    if(.not. accept)then
-      !** Scatter positions
-      call lmp%scatter_atoms('x', x)
-      !** Go back to original box size
-      write(command_str,'(a4,f10.4)')'change_box x ',1._PR/boxratio,' y scale ',1._PR/boxratio,' z scale ',1._PR/boxratio
-      call lmp%command(trim(command_str))
-    end if
-
-    !** Deallocate memory from temporary arrays
-    deallocate(x, xn)
-
-  end subroutine Volume_move
-
-  !====================================================================================================
   subroutine GenerateVelocities(x,v,Species,box,vf)
     real(PR), dimension(:), intent(in) :: x
     real(PR), dimension(:), intent(inout) :: v
@@ -315,56 +215,6 @@ contains
     end do
 
   end subroutine GenerateVelocities
-
-  !====================================================================================================
-  subroutine ScalePositions(x,xn,Species,box,boxratio)
-    real(PR), dimension(:), intent(in) :: x
-    real(PR), dimension(:), intent(out) :: xn
-    type(SpeciesInfo), dimension(:), intent(in) :: Species
-    real(PR), intent(in) :: box,boxratio
-
-    integer :: spc, mol, atm, icount, NumberOfSpecies
-    
-    integer :: llimit,ulimit
-    real(PR), dimension(:,:,:), allocatable :: AtomPosition
-    real(PR), dimension(3) :: vec, CenterOfMass
-
-    !** Generate velocities for Rigid Water
-    NumberOfSpecies=size(Species)
-    ulimit=0
-    icount=1
-    do spc=1,NumberOfSpecies
-      allocate(AtomPosition(3,Species(spc)%NumberOfAtoms,Species(spc)%NumberOfMolecules))
-      llimit=ulimit+1
-      ulimit=ulimit+size(AtomPosition)
-      AtomPosition=reshape(x(llimit:ulimit),(/3, Species(spc)%NumberOfAtoms,Species(spc)%NumberOfMolecules/))
-
-      do mol=1,Species(spc)%NumberOfMolecules
-        !** Modify Atom Positions according to PBC
-        do atm=2,Species(spc)%NumberOfAtoms
-          vec=AtomPosition(:,atm,mol)-AtomPosition(:,1,mol)
-          vec=vec-box*anint(vec/box)
-          AtomPosition(:,atm,mol)=AtomPosition(:,1,mol)+vec
-        end do
-
-        ! Compute Center Of Mass
-        CenterOfMass=0._PR
-        do atm=1,Species(spc)%NumberOfAtoms
-          CenterOfMass=CenterOfMass+AtomPosition(:,atm,mol)*Species(spc)%AtomicWeight(atm)
-        end do
-        CenterOfMass=CenterOfMass/Species(spc)%MolecularWeight
-
-        !** Scale molecule positions
-        do atm=1,Species(spc)%NumberOfAtoms
-          vec=AtomPosition(:,atm,mol)-CenterOfMass
-          vec=vec+CenterOfMass*boxratio
-          xn(icount:icount+2)=vec
-          icount=icount+3
-        end do
-      end do
-      deallocate(AtomPosition)
-    end do
-  end subroutine ScalePositions
 
   !=========================================================================================
   ! Calculates the cross product of two vectors

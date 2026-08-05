@@ -7,7 +7,7 @@ module montecarlo
   use nucleus, only: ComputeClusterProperties
   use random, only: RandomNumber, SetRandomNumberSeed
   use datatypes, only: ClusterInfo, SpeciesInfo, BiasInfo
-  use mcmoves, only: MD_move, Volume_move
+  use mcmoves, only: MD_move
   implicit none
   private
 
