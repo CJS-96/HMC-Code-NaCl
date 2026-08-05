@@ -116,7 +116,7 @@ contains
     call lmp%command(trim(command_str))
 
     !** Set integrator
-    call lmp%command('fix NVE Rest nve')
+    call lmp%command('fix NVE all nve')
 
     !** Thermo output
     call lmp%command('thermo_style custom step etotal ke pe evdwl epair ecoul elong etail temp')
