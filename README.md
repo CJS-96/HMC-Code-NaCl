@@ -4,7 +4,7 @@ This repository contains the hybrid monte-carlo codes used to study NaCl crystal
 
 # Working Principle
 
-These codes invoke LAMMPS to run a short MD simulation for generating new configuration of the system and accept or reject it using the metropolis criterion satisfying the detailed balance. It implements the use of biasing potentials for the crystallinity (m) and solvation state (s), along with ensuring that the cluster size remains constant during the simulation.
+These codes invoke LAMMPS to run a short MD simulation for generating new configuration of the system and accept or reject it using the metropolis criterion satisfying the detailed balance. It implements the use of biasing potentials for the crystallinity (m) and solvation state (s) along with ensuring that the cluster size remains constant during the simulation.
 
 # Code Versions
 
