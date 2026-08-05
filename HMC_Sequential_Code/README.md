@@ -10,6 +10,6 @@ This version of the code launches a series of simulations. The files required to
 
 The parallel simulation is launched in the following manner:
 
-mpirun -np ${TotalSimulations}*${ProcessorsPerSimulations} ./delta_Fmn ${TotalSimulations}
+mpirun -np ${Processors} ./delta_Fmn
 
 Note: Please ensure that all the pre-requisite compiler modules and libraries are set correctly before running.
