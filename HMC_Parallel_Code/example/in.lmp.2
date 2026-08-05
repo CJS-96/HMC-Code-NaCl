@@ -1,0 +1,11 @@
+include pair.lmp
+
+fix SHAKE all shake 0.0001 20 0 b 1 a 1
+
+neighbor 2.0 bin
+
+group solute type 1 2
+group solvent type 3 4
+
+compute thermo_ke all ke
+
